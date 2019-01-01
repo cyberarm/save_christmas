@@ -1,6 +1,55 @@
 GameObject = Struct.new(:sprite, :x, :y, :z, :x_velocity, :y_velocity, :jumping)
+class ParticleEmitter
+  def initialize(context:, sprites:, max_particles: 512, initial_velocity: 3, angle: 90, jitter: 20, per_interval:, interval:, time_to_live:)
+    @context = context
+    @sprites = sprites
+    @max_particles = max_particles
+    @initial_velocity = initial_velocity
+    @angle = angle
+    @jitter = jitter
+    @per_interval = per_interval
+    @interval = interval
+    @time_to_live = time_to_live
+
+    @last_interval = @context.milliseconds
+
+    @particles = []
+  end
+
+  def draw
+    @particles.each {|s| @context.sprite(s.sprite, s.x, s.y)}
+  end
+
+  def update
+    if @particles.size <= @max_particles && @context.milliseconds > @last_interval + @interval
+      @per_interval.times { spawn_particle }
+    end
+
+    @particles.each do |particle|
+      particle.x-=particle.x_velocity
+      particle.y-=particle.y_velocity
+
+      @particles.delete(particle) if @context.milliseconds > @time_to_live + particle.jumping
+    end
+  end
+
+  def spawn_particle
+    x_vel = @initial_velocity * Math.cos((90 + rand(@angle - @jitter/2..@angle + @jitter/2)) * Math::PI / 180)
+    y_vel = @initial_velocity * Math.sin((90 + rand(@angle - @jitter/2..@angle + @jitter/2)) * Math::PI / 180)
+
+    @particles << GameObject.new(@sprites.sample, rand(-@context.width/2..@context.width+(@context.width/2)), -32, 0, x_vel, y_vel, @context.milliseconds)
+  end
+
+  def reset
+    @particles.clear
+    @last_interval = @context.milliseconds
+  end
+end
+
 
 def init
+  @snow_emitter = ParticleEmitter.new(context: self, sprites: [7, 16], angle: 200, initial_velocity: 1, per_interval: 1, interval: 32, time_to_live: 5_000)
+
   @player = GameObject.new(20, 0, 1, 0, 0, 0, false)
   @lives  = 3
   @ready  = false
@@ -25,6 +74,8 @@ def init
 end
 
 def reset
+  @snow_emitter.reset
+
   @player.jumping = false
   @collisions = []
   @collected_presents = 0
@@ -86,6 +137,8 @@ def draw
     debug_draw
   end
 
+  @snow_emitter.draw
+
   if @transitioning || @game_complete || @game_over
     rect(0, 0, width, height, black)
     if @transitioning
@@ -126,6 +179,8 @@ def update
     end
     return
   end
+
+  @snow_emitter.update
 
   input_handler
 
