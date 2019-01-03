@@ -1,0 +1,66 @@
+
+<!doctype html5>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Save Christmas | AuthorEngine</title>
+  </head>
+  <style>
+    
+@font-face { font-family: Connection; src: url('fonts/Connection.otf'); }
+@font-face { font-family: ConnectionBold; src: url('fonts/ConnectionBold.otf'); }
+
+body {
+  margin: 0;
+  padding: 0;
+  background: #222;
+}
+#canvas {
+  display: block;
+  margin: 0 auto;
+  // cursor: none;
+}
+#loading {
+  font-family: Connection, sans serif;
+  color: white;
+  text-align: center;
+
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  width: 50%;
+  height: 30%;
+  margin: auto;
+}
+      
+  </style>
+  <body>
+    <h1 id="loading">Loading...</h1>
+    <canvas id="canvas">
+      <h1>Your Browser Does Not Support HTML5 Canvas!</h1>
+    </canvas>
+
+    <script src="game.js"></script>
+    <script>
+      // Add a small delay before loading application in order to finish loading page and show "Loading..."
+      window.setTimeout(function() {
+        console.log("Loading Opal runtime...");
+
+        var opal_runtime = document.createElement('script');
+        opal_runtime.onload = function() {
+          console.log("Loading AuthorEngine runtime...");
+
+          var author_engine_runtime = document.createElement('script');
+          author_engine_runtime.src = "js/author_engine.js";
+          document.head.appendChild(author_engine_runtime);
+        }
+        opal_runtime.src = "js/runtime.js";
+
+        document.head.appendChild(opal_runtime);
+      }, 500);
+    </script>
+  </body>
+</html>
+      
