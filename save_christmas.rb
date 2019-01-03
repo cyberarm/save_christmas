@@ -14,6 +14,10 @@ class ParticleEmitter
     @last_interval = @context.milliseconds
 
     @particles = []
+
+    @x_positions = []
+    @current_x_position = 0
+    100.times { @x_positions << rand(0..@context.width+(@context.width/2)) }
   end
 
   def draw
@@ -22,10 +26,13 @@ class ParticleEmitter
 
   def update
     if @particles.size <= @max_particles && @context.milliseconds > @last_interval + @interval
+      @last_interval = @context.milliseconds
       @per_interval.times { spawn_particle }
     end
 
     @particles.each do |particle|
+      next unless particle
+
       particle.x-=particle.x_velocity
       particle.y-=particle.y_velocity
 
@@ -37,7 +44,14 @@ class ParticleEmitter
     x_vel = @initial_velocity * Math.cos((90 + rand(@angle - @jitter/2..@angle + @jitter/2)) * Math::PI / 180)
     y_vel = @initial_velocity * Math.sin((90 + rand(@angle - @jitter/2..@angle + @jitter/2)) * Math::PI / 180)
 
-    @particles << GameObject.new(@sprites.sample, rand(-@context.width/2..@context.width+(@context.width/2)), -32, 0, x_vel, y_vel, @context.milliseconds)
+    @particles << GameObject.new(@sprites.sample, pick_position, -32, 0, x_vel, y_vel, @context.milliseconds)
+  end
+
+  def pick_position
+    @current_x_position += 1
+    @current_x_position = 0 unless @current_x_position < @x_positions.size
+
+    @x_positions[@current_x_position]
   end
 
   def reset
@@ -48,7 +62,9 @@ end
 
 
 def init
-  @snow_emitter = ParticleEmitter.new(context: self, sprites: [7, 16], angle: 200, initial_velocity: 1, per_interval: 1, interval: 32, time_to_live: 5_000)
+  @levels ||= AuthorEngine::GameRunner.instance.levels
+
+  @snow_emitter = ParticleEmitter.new(context: self, max_particles: 128, sprites: [7, 16], angle: 200, initial_velocity: 0.51, per_interval: 1, interval: 64, time_to_live: 6_000)
 
   @player = GameObject.new(20, 0, 1, 0, 0, 0, false)
   @lives  = 3
@@ -118,7 +134,7 @@ def draw
   unless @ready
     rect(0, 0, width, height, light_gray)
     text("Save Christmas", 15, height/2 - 32, 14, 0, black)
-    text("Press \"Y[C]\" to start", 24, height/2 + 32, 8, 0, black)
+    text("Press Y[C] to start", 24, height/2 + 32, 8, 0, black)
 
     @ready_x ||= 16
     sprite(@player.sprite, @ready_x, height/2 - 8)
@@ -148,14 +164,14 @@ def draw
     if @game_complete
       text("Game Complete!", 10, height/2-8, 16)
       @game_completed_in ||= (milliseconds-@game_start_time)/1000
-      text("Took #{@game_completed_in} seconds", 4, height/2+12, 16)
+      text("Took #{@game_completed_in} seconds", 4, height/2+12, 8)
     end
     if @game_over
       text("Game Over!", 10, height/2-8, 16, 0, red)
     end
   end
 
-  text("#{fps} - Level #{@current_level} of #{LevelEditor.instance.levels.size}")
+  text("#{fps} fps - Level #{@current_level+1} of #{@levels.size}")
 end
 
 def update
