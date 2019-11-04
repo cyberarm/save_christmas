@@ -1,4 +1,5 @@
-GameObject = Struct.new(:sprite, :x, :y, :z, :x_velocity, :y_velocity, :jumping)
+GameObject = Struct.new(:sprite, :x, :y, :z, :x_velocity, :y_velocity, :jumping, :speed)
+GRAVITY = 9.8
 class ParticleEmitter
   def initialize(context:, sprites:, max_particles: 512, initial_velocity: 3, angle: 90, jitter: 20, per_interval:, interval:, time_to_live:)
     @context = context
@@ -24,7 +25,7 @@ class ParticleEmitter
     @particles.each {|s| @context.sprite(s.sprite, s.x, s.y)}
   end
 
-  def update
+  def update(dt)
     if @particles.size <= @max_particles && @context.milliseconds > @last_interval + @interval
       @last_interval = @context.milliseconds
       @per_interval.times { spawn_particle }
@@ -33,8 +34,8 @@ class ParticleEmitter
     @particles.each do |particle|
       next unless particle
 
-      particle.x-=particle.x_velocity
-      particle.y-=particle.y_velocity
+      particle.x -= particle.x_velocity * dt
+      particle.y -= particle.y_velocity * dt
 
       @particles.delete(particle) if @context.milliseconds > @time_to_live + particle.jumping
     end
@@ -62,11 +63,9 @@ end
 
 
 def init
-  @levels ||= AuthorEngine::GameRunner.instance.levels
+  @snow_emitter = ParticleEmitter.new(context: self, max_particles: 12, sprites: [7, 16], angle: 200, initial_velocity: 55.0, per_interval: 1, interval: 750, time_to_live: 3_500)
 
-  @snow_emitter = ParticleEmitter.new(context: self, max_particles: 128, sprites: [7, 16], angle: 200, initial_velocity: 0.51, per_interval: 1, interval: 64, time_to_live: 6_000)
-
-  @player = GameObject.new(20, 0, 1, 0, 0, 0, false)
+  @player = GameObject.new(20, 0, 1, 0, 0, 0, false, 8)
   @lives  = 3
   @ready  = false
 
@@ -85,6 +84,8 @@ def init
   @change_interval = 150
   @swapped = false
 
+  @last_frame_time = milliseconds
+
   reset
   transition
 end
@@ -95,6 +96,7 @@ def reset
   @player.jumping = false
   @collisions = []
   @collected_presents = 0
+
   @player.x = 0
   @player.y = 1
   @player.x_velocity = 0
@@ -113,7 +115,7 @@ end
 
 def reset_game
   i = 0
-  while(level = @levels[i])
+  while(level = levels[i])
     reset_level(level)
     i+=1
   end
@@ -126,6 +128,8 @@ def reset_game
 
   reset
   transition
+
+  @last_frame_time = milliseconds
 end
 
 def draw
@@ -161,17 +165,19 @@ def draw
       text("LEVEL #{@current_level+1}", 10, height/2-8, 16)
       text("Lives #{@lives}", 10, height/2+10, 8)
     end
+
     if @game_complete
-      text("Game Complete!", 10, height/2-8, 16)
+      text("Game Complete!", 10, height/2-8, 14)
       @game_completed_in ||= (milliseconds-@game_start_time)/1000
       text("Took #{@game_completed_in} seconds", 4, height/2+12, 8)
     end
+
     if @game_over
-      text("Game Over!", 10, height/2-8, 16, 0, red)
+      text("Game Over!", 10, height/2-8, 14, 0, red)
     end
   end
 
-  text("#{fps} fps - Level #{@current_level+1} of #{@levels.size}")
+  text("#{fps} fps - Level #{@current_level+1} of #{levels.size}")
 end
 
 def update
@@ -179,6 +185,8 @@ def update
     if button?("y")
       @game_start_time = milliseconds
       @ready = true
+
+      @last_frame_time = milliseconds
     end
     return
   end
@@ -186,22 +194,30 @@ def update
   if @transitioning
     @transitioning = false if milliseconds >= @transition_started + @transition_time
 
+    @last_frame_time = milliseconds
     return
   end
 
   if @game_complete || @game_over
     if button?("x")
       reset_game
+
+      @last_frame_time = milliseconds
     end
     return
   end
 
-  @snow_emitter.update
+  @snow_emitter.update(dt)
 
   input_handler
 
-  @player.x+=@player.x_velocity
-  @player.y+=@player.y_velocity
+  @player.x += @player.x_velocity
+  @player.y -= @player.y_velocity
+  @player.x_velocity *= 0.9
+
+  @player.y_velocity -= GRAVITY * dt
+  @player.y_velocity = GRAVITY if @player.y_velocity > GRAVITY
+  @player.y_velocity = -GRAVITY if @player.y_velocity < -GRAVITY
 
   position_viewport
 
@@ -221,7 +237,7 @@ def update
   end
 
   if collected_all_presents?
-    if @levels[@current_level+1]
+    if levels[@current_level+1]
       @current_level+=1
       reset
       transition
@@ -229,6 +245,8 @@ def update
       game_complete
     end
   end
+
+  @last_frame_time = milliseconds
 end
 
 def transition
@@ -268,11 +286,11 @@ def debug_draw
 end
 
 def input_handler
-  @player.x += 1 if button?("right")
-  @player.x -= 1 if button?("left")
+  @player.x_velocity += @player.speed * dt if button?("right")
+  @player.x_velocity -= @player.speed * dt if button?("left")
 
   if (button?("x") || button?("up")) && !@player.jumping
-    @player.y_velocity = -2.5
+    @player.y_velocity = 3.0
     @player.jumping = true unless @player.jumping
   end
 
@@ -311,8 +329,6 @@ def collision_handler
       @player.x = (sprite.x - ((my_box.x) + my_box.width)) if edges[:left]  && @player.y + my_box.y + my_box.height > sprite.y + 6
       @player.x = (sprite.x + (my_box.x)  + my_box.width)  if edges[:right] && @player.y + my_box.y + my_box.height > sprite.y + 6
     end
-  else
-    @player.y_velocity += 0.10 if @player.y_velocity < 3.1
   end
 end
 
@@ -344,7 +360,7 @@ end
 
 def collected_all_presents?
   presents_pending = 0
-  @levels[@current_level].each do |sprite|
+  levels[@current_level].each do |sprite|
     if is_present?(sprite)
       presents_pending+=1
     end
@@ -360,7 +376,7 @@ def lose_life!
     die!
   else
 
-    reset_level(@levels[@current_level])
+    reset_level(levels[@current_level])
     reset
     transition
   end
@@ -368,4 +384,8 @@ end
 
 def die!
   @game_over = true
+end
+
+def dt
+  (milliseconds - @last_frame_time) / 1000.0
 end
